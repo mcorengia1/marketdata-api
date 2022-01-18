@@ -265,6 +265,9 @@ func (c *Client) CoinsList(platforms bool) (*types.CoinList, error) {
 
 // CoinsMarket /coins/market
 func (c *Client) CoinsMarket(vsCurrency string, ids []string, order string, perPage int, page int, sparkline bool, priceChangePercentage []string) (*types.CoinsMarket, error) {
+
+	defer errManagment()
+
 	if len(vsCurrency) == 0 {
 		return nil, fmt.Errorf("vs_currency is required")
 	}

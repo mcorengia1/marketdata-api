@@ -45,7 +45,9 @@ func GetMarketData(cg *cgClient.Client) ([]cgTypes.CoinMarketData, time.Time) {
 		//Traer tanda de datos
 		market, err := cg.CoinsMarket(vsCurrency, ids, order, perPage, page, sparkline, priceChangePercentage)
 		if err != nil {
-			log.Fatal(err)
+			fmt.Println(err)
+			time.Sleep(time.Duration(time.Second * 60))
+			continue
 		}
 
 		dataCount := len(*market)
