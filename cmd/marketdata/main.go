@@ -12,7 +12,7 @@ import (
 
 	"github.com/gorilla/mux"
 
-	//coinsInfo "api.jacarandapp.com/src/fetch/coins"
+	coinsInfo "api.jacarandapp.com/src/fetch/coins"
 	fetchData "api.jacarandapp.com/src/fetch/marketdata"
 	sorting "api.jacarandapp.com/src/sorting"
 
@@ -28,17 +28,23 @@ var marketData []cgTypes.CoinMarketData
 var priceAsc, priceDesc, marketCapAsc, marketCapDesc, priceChange24Asc, priceChange24Desc, volumeAsc, volumeDesc []cgTypes.CoinMarketData
 var lastUpdate time.Time
 
+/* Clients */
+var mongoClient *mongo.Client
+var cg *cgClient.Client
+
 /* Flags */
 var orderedCoinsReady = false
 
-func updateData(cg *cgClient.Client, mongoClient *mongo.Client) {
+func updateCoinInfo() {
+	for {
+		coinsInfo.UpdateCoinsInfo(cg, mongoClient)
+	}
+}
 
-	//coinsInfo.UpdateCoinsInfo(cg, mongoClient)
-	//fmt.Println(coinsInfo.GetCoinInfoById(mongoClient, "01coin"))
+func updateMarketData() {
 
 	for {
 		marketData, lastUpdate = fetchData.GetMarketData(cg)
-		fmt.Println(lastUpdate)
 
 		// Price
 		sorting.SortBy(&marketData, sorting.PriceAsc)
@@ -76,7 +82,7 @@ func updateData(cg *cgClient.Client, mongoClient *mongo.Client) {
 		volumeDesc = make([]cgTypes.CoinMarketData, len(marketData))
 		copy(volumeDesc, marketData)
 
-		fmt.Println("Data updated")
+		fmt.Println("Data updated on ", lastUpdate)
 		orderedCoinsReady = true
 	}
 }
@@ -114,14 +120,10 @@ func coinsByIdHandler(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		ids := strings.Split(vars["ids"], ",")
 
-		if vars["datatype"] == "basic" {
-			//Entrego la informacion basica de esos ids
-			elements := getElementsById(&marketData, &ids)
-			json.NewEncoder(w).Encode(elements)
+		//Entrego la informacion basica de esos ids
+		elements := getElementsById(&marketData, &ids)
+		json.NewEncoder(w).Encode(elements)
 
-		} else {
-			//Entrego la informacion basica mas informacion extra
-		}
 	}
 }
 
@@ -149,17 +151,35 @@ func coinsByContractHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(elements)
 }
 
+func coinsInfoByIdsHandler(w http.ResponseWriter, r *http.Request) {
+
+	vars := mux.Vars(r)
+	ids := strings.Split(vars["ids"], ",")
+	var elements []cgTypes.CoinInfoDB
+
+	idsLen := len(ids)
+	for i := 0; i < idsLen; i++ {
+
+		elements = append(elements, coinsInfo.GetCoinInfoById(mongoClient, ids[i]))
+
+	}
+
+	json.NewEncoder(w).Encode(elements)
+}
+
 /* Router logic */
 
 func handleRequest(r *mux.Router) {
 
 	//El routeo va en orden de la ruta mas especifica a la menos especifica
 
-	r.HandleFunc("/marketdata/ordered/coins", orderedCoinsHandler).Queries("order", "{order}", "start", "{start:[0-9]+}", "end", "{end:[0-9]+}")
+	r.HandleFunc("/coins/marketdata/ordered", orderedCoinsHandler).Queries("order", "{order}", "start", "{start:[0-9]+}", "end", "{end:[0-9]+}")
 
-	r.HandleFunc("/marketdata/ids/coins", coinsByIdHandler).Queries("ids", "{ids}", "datatype", "{datatype}")
+	r.HandleFunc("/coins/marketdata/ids", coinsByIdHandler).Queries("ids", "{ids}")
 
-	r.HandleFunc("/marketdata/contracts/coins", coinsByContractHandler).Queries("platform", "{platform}", "contracts", "{contracts}")
+	r.HandleFunc("/coins/marketdata/contracts", coinsByContractHandler).Queries("platform", "{platform}", "contracts", "{contracts}")
+
+	r.HandleFunc("/coins/info/ids", coinsInfoByIdsHandler).Queries("ids", "{ids}")
 
 	log.Fatal(http.ListenAndServe(":10000", r))
 }
@@ -183,36 +203,39 @@ func orderedCoinsHandler(w http.ResponseWriter, r *http.Request) {
 	end, _ := strconv.Atoi(vars["end"])
 	//No compruebo los errores antes porque ya compruebo los datos antes
 
-	if end < len(marketData) {
-		switch vars["order"] {
-		case "price-asc":
-			json.NewEncoder(w).Encode(priceAsc[start:end])
-
-		case "price-desc":
-			json.NewEncoder(w).Encode(priceDesc[start:end])
-
-		case "marketcap-asc":
-			json.NewEncoder(w).Encode(marketCapAsc[start:end])
-
-		case "marketcap-desc":
-			json.NewEncoder(w).Encode(marketCapDesc[start:end])
-
-		case "price-change-24-asc":
-			json.NewEncoder(w).Encode(priceChange24Asc[start:end])
-
-		case "price-change-24-desc":
-			json.NewEncoder(w).Encode(priceChange24Desc[start:end])
-
-		case "volume-asc":
-			json.NewEncoder(w).Encode(volumeAsc[start:end])
-
-		case "volume-desc":
-			json.NewEncoder(w).Encode(volumeDesc[start:end])
-
-		default:
-			fmt.Println("Error")
-		}
+	if end > len(marketData)-1 {
+		end = len(marketData) - 1
 	}
+
+	switch vars["order"] {
+	case "price-asc":
+		json.NewEncoder(w).Encode(priceAsc[start:end])
+
+	case "price-desc":
+		json.NewEncoder(w).Encode(priceDesc[start:end])
+
+	case "marketcap-asc":
+		json.NewEncoder(w).Encode(marketCapAsc[start:end])
+
+	case "marketcap-desc":
+		json.NewEncoder(w).Encode(marketCapDesc[start:end])
+
+	case "price-change-24-asc":
+		json.NewEncoder(w).Encode(priceChange24Asc[start:end])
+
+	case "price-change-24-desc":
+		json.NewEncoder(w).Encode(priceChange24Desc[start:end])
+
+	case "volume-asc":
+		json.NewEncoder(w).Encode(volumeAsc[start:end])
+
+	case "volume-desc":
+		json.NewEncoder(w).Encode(volumeDesc[start:end])
+
+	default:
+		fmt.Println("Error")
+	}
+
 }
 
 /* End router logic */
@@ -223,21 +246,22 @@ func main() {
 	httpClient := &http.Client{
 		Timeout: time.Second * 10,
 	}
-	cg := cgClient.NewClient(httpClient)
+	cg = cgClient.NewClient(httpClient)
 
-	/* Connect to the database */
-	mongoClient, err := mongo.NewClient(options.Client().ApplyURI("mongodb://127.0.0.1:27017/?readPreference=primary&appname=MongoDB%20Compass&directConnection=true&ssl=false"))
-	if err != nil {
-		log.Fatal(err)
-	}
+	/* MongoDB */
+	mongoClient, _ = mongo.NewClient(options.Client().ApplyURI("mongodb://127.0.0.1:27017/?readPreference=primary&appname=MongoDB%20Compass&directConnection=true&ssl=false"))
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-	err = mongoClient.Connect(ctx)
+	err := mongoClient.Connect(ctx)
+
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer mongoClient.Disconnect(ctx)
+	/* End MongoDB */
 
-	go updateData(cg, mongoClient)
+	go updateMarketData()
+	go updateCoinInfo()
+
 	router := mux.NewRouter()
 	handleRequest(router)
 }

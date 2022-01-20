@@ -9,7 +9,7 @@ import (
 	cgTypes "api.jacarandapp.com/src/coingecko/types"
 )
 
-const requestByMinute = 30 //25
+const requestByMinute = 25
 const perPage = 150
 
 /* La data desde la API de coingecko devuelve un valor del tipo *types.CoinsMarket
@@ -80,7 +80,5 @@ func GetMarketData(cg *cgClient.Client) ([]cgTypes.CoinMarketData, time.Time) {
 	}
 
 	lastUpdate := time.Now()
-	fmt.Println(len(marketData))
-	fmt.Println(marketData[4])
 	return marketData, lastUpdate
 }

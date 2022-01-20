@@ -13,7 +13,7 @@ import (
 	cgTypes "api.jacarandapp.com/src/coingecko/types"
 )
 
-const requestByMinute = 40
+const requestByMinute = 10
 
 /* La data desde la API de coingecko devuelve un valor del tipo *types.CoinsMarket
 la informacion dentro es un json al que se le aplico unmarshal()
