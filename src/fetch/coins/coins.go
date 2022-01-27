@@ -3,7 +3,6 @@ package coins
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"time"
 
@@ -69,7 +68,8 @@ func GetCoinInfoById(mongoClient *mongo.Client, id string) cgTypes.CoinInfoDB {
 	var data cgTypes.CoinInfoDB
 	err := coll.FindOne(ctx, bson.D{{"id", id}}).Decode(&data)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println(err)
+		return data
 	}
 
 	return data
