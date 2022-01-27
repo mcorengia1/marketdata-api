@@ -390,9 +390,14 @@ type Global struct {
 }
 
 type CoinInfoDB struct {
-	ID                  string   `json:"id" bson:"id"`
-	Symbol              string   `json:"symbol" bson:"symbol"`
-	Name                string   `json:"name" bson:"name"`
+	ID     string `json:"id" bson:"id"`
+	Symbol string `json:"symbol" bson:"symbol"`
+	Name   string `json:"name" bson:"name"`
+
+	PlatformsKey   []string `json:"platforms_key" bson:"platforms_key"`
+	PlatformsValue []string `json:"platforms_value" bson:"platforms_value"`
+
+	AssetPlatformId     string   `json:"asset_platform_id" bson:"asset_platform_id"`
 	BlockTimeInMin      int32    `json:"block_time_in_minutes" bson:"block_time_in_minutes"`
 	Categories          []string `json:"categories" bson:"categories"`
 	CountryOrigin       string   `json:"country_origin" bson:"country_origin"`

@@ -25,6 +25,12 @@ func CoinInfoDBCreate(coin types.CoinsID) types.CoinInfoDB {
 	coinInfoToWrite.Symbol = coin.Symbol
 	coinInfoToWrite.Name = coin.Name
 
+	for key, value := range coin.Platforms {
+		coinInfoToWrite.PlatformsKey = append(coinInfoToWrite.PlatformsKey, key)
+		coinInfoToWrite.PlatformsValue = append(coinInfoToWrite.PlatformsValue, value)
+	}
+
+	coinInfoToWrite.AssetPlatformId = coin.AssetPlatformId
 	coinInfoToWrite.BlockTimeInMin = coin.BlockTimeInMin
 	coinInfoToWrite.Categories = coin.Categories
 	coinInfoToWrite.CountryOrigin = coin.CountryOrigin
