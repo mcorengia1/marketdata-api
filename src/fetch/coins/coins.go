@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -20,12 +21,14 @@ la informacion dentro es un json al que se le aplico unmarshal()
 Peso aprox de todos los datos 28MB */
 func UpdateCoinsInfo(cg *cgClient.Client, dbClient *mongo.Client) {
 
+	MONGO_DATABASE := os.Getenv("MONGO_DATABASE")
+
 	fetchStart := time.Now()
 	coinsList, _ := cg.CoinsList(false)
 	lenCoinsList := len(*coinsList)
 
 	/* Connect to the database */
-	coll := dbClient.Database("testing").Collection("coins_info")
+	coll := dbClient.Database(MONGO_DATABASE).Collection("coins_info")
 
 	for i := 0; i < lenCoinsList; i++ {
 

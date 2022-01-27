@@ -44,6 +44,7 @@ func GetMarketData(cg *cgClient.Client) ([]cgTypes.CoinMarketData, time.Time) {
 	for page < pagesToRequest {
 		//Traer tanda de datos
 		market, err := cg.CoinsMarket(vsCurrency, ids, order, perPage, page, sparkline, priceChangePercentage)
+
 		if err != nil {
 			fmt.Println(err)
 			time.Sleep(time.Duration(time.Second * 60))

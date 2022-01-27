@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -19,8 +18,7 @@ import (
 	cgClient "api.jacarandapp.com/src/coingecko/client"
 	cgTypes "api.jacarandapp.com/src/coingecko/types"
 
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	mongo "api.jacarandapp.com/src/controllers/mongo"
 )
 
 /* Market Data */
@@ -28,8 +26,6 @@ var marketData []cgTypes.CoinMarketData
 var priceAsc, priceDesc, marketCapAsc, marketCapDesc, priceChange24Asc, priceChange24Desc, volumeAsc, volumeDesc []cgTypes.CoinMarketData
 var lastUpdate time.Time
 
-/* Clients */
-var mongoClient *mongo.Client
 var cg *cgClient.Client
 
 /* Flags */
@@ -37,7 +33,7 @@ var orderedCoinsReady = false
 
 func updateCoinInfo() {
 	for {
-		coinsInfo.UpdateCoinsInfo(cg, mongoClient)
+		coinsInfo.UpdateCoinsInfo(cg, mongo.Client)
 	}
 }
 
@@ -160,7 +156,7 @@ func coinsInfoByIdsHandler(w http.ResponseWriter, r *http.Request) {
 	idsLen := len(ids)
 	for i := 0; i < idsLen; i++ {
 
-		elements = append(elements, coinsInfo.GetCoinInfoById(mongoClient, ids[i]))
+		elements = append(elements, coinsInfo.GetCoinInfoById(mongo.Client, ids[i]))
 
 	}
 
@@ -241,23 +237,11 @@ func orderedCoinsHandler(w http.ResponseWriter, r *http.Request) {
 /* End router logic */
 
 func main() {
-
 	/* Coingecko client */
 	httpClient := &http.Client{
 		Timeout: time.Second * 10,
 	}
 	cg = cgClient.NewClient(httpClient)
-
-	/* MongoDB */
-	mongoClient, _ = mongo.NewClient(options.Client().ApplyURI("mongodb://127.0.0.1:27017/?readPreference=primary&appname=MongoDB%20Compass&directConnection=true&ssl=false"))
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-	err := mongoClient.Connect(ctx)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer mongoClient.Disconnect(ctx)
-	/* End MongoDB */
 
 	go updateMarketData()
 	go updateCoinInfo()
