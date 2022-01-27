@@ -62,7 +62,9 @@ func UpdateCoinsInfo(cg *cgClient.Client, dbClient *mongo.Client) {
 
 func GetCoinInfoById(mongoClient *mongo.Client, id string) cgTypes.CoinInfoDB {
 
-	coll := mongoClient.Database("testing").Collection("coins_info")
+	MONGO_DATABASE := os.Getenv("MONGO_DATABASE")
+
+	coll := mongoClient.Database(MONGO_DATABASE).Collection("coins_info")
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 
 	var data cgTypes.CoinInfoDB
