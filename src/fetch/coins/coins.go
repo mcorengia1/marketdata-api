@@ -69,7 +69,6 @@ func GetCoinInfoById(mongoClient *mongo.Client, id string) cgTypes.CoinInfoDB {
 	err := coll.FindOne(ctx, bson.D{{"id", id}}).Decode(&data)
 	if err != nil {
 		fmt.Println(err)
-		return data
 	}
 
 	return data
