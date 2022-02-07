@@ -140,6 +140,7 @@ func NewClient(httpClient *http.Client) *Client {
 	if httpClient == nil {
 		httpClient = http.DefaultClient
 	}
+
 	return &Client{httpClient: httpClient}
 }
 
@@ -250,6 +251,8 @@ func (c *Client) SimpleSupportedVSCurrencies() (*types.SimpleSupportedVSCurrenci
 
 // CoinsList /coins/list
 func (c *Client) CoinsList(platforms bool) (*types.CoinList, error) {
+	defer errManagment()
+
 	var url string
 	if platforms {
 		url = fmt.Sprintf("%s/coins/list?include_platform=true", baseURL)

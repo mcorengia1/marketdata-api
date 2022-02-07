@@ -3,13 +3,18 @@ package mongo
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+
+	"github.com/go-kit/log"
+	"github.com/go-kit/log/level"
 )
+
+/* Loggers */
+var logger log.Logger = log.NewLogfmtLogger(os.Stdout)
 
 var (
 	Client     *mongo.Client
@@ -36,10 +41,10 @@ func init() {
 
 	err = configDB(ctx)
 	if err != nil {
-		log.Fatalf("Database configuration failed: %v", err)
+		level.Error(logger).Log("msg", "Database configuration failed, mongo client", "ts", log.DefaultTimestampUTC(), "err", err)
 	}
 
-	fmt.Println("Successfully connected to MongoDB")
+	level.Info(logger).Log("msg", "Successfully connected to MongoDB", "ts", log.DefaultTimestampUTC())
 }
 
 func configDB(ctx context.Context) error {
@@ -55,6 +60,7 @@ func configDB(ctx context.Context) error {
 
 	if err != nil {
 		return fmt.Errorf("couldn't connect to mongo: %v", err)
+
 	}
 	err = Client.Connect(ctx)
 	if err != nil {

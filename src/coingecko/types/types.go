@@ -461,3 +461,30 @@ type CoinMarketData struct {
 	Platforms  PlatformsItem
 	MarketData CoinsMarketItem
 }
+
+type ReductedCoinInfo struct {
+	/*mkt data*/
+	Name                     string            `json:"name,omitempty" bson:"name,omitempty"`
+	Symbol                   string            `json:"symbol,omitempty" bson:"symbol,omitempty"`
+	Id                       string            `json:"id,omitempty" bson:"id,omitempty"`
+	Platforms                map[string]string `json:"platforms,omitempty" bson:"platforms,omitempty"`
+	CurrentPrice             float64           `json:"current_price,omitempty" bson:"current_price,omitempty"`
+	SparkLine                []float64         `json:"sparkline_7d,omitempty" bson:"sparkline_7d,omitempty"`
+	PriceChangePercentage24h float64           `json:"price_change_percentage_24h,omitempty" bson:"price_change_percentage_24h,omitempty"`
+
+	/* Coins info */
+	MarketCapRank uint16 `json:"market_cap_rank,omitempty" bson:"market_cap_rank,omitempty"`
+	CoinGeckoRank uint16 `json:"coingecko_rank,omitempty" bson:"coingecko_rank,omitempty"`
+
+	CoinGeckoScore      float32 `json:"coingecko_score,omitempty" bson:"coingecko_score,omitempty"`
+	DeveloperScore      float32 `json:"developer_score,omitempty" bson:"developer_score,omitempty"`
+	CommunityScore      float32 `json:"community_score,omitempty" bson:"community_score,omitempty"`
+	LiquidityScore      float32 `json:"liquidity_score,omitempty" bson:"liquidity_score,omitempty"`
+	PublicInterestScore float32 `json:"public_interest_score,omitempty" bson:"public_interest_score,omitempty"`
+
+	Categories []string `json:"categories,omitempty" bson:"categories,omitempty"`
+
+	ImageThumbUrl string `json:"image_thumb,omitempty" bson:"image_thumb,omitempty"`
+	ImageSmallUrl string `json:"image_small,omitempty" bson:"image_small,omitempty"`
+	ImageLargeUrl string `json:"image_large,omitempty" bson:"image_large,omitempty"`
+}

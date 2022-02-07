@@ -1,13 +1,17 @@
 package fetch
 
 import (
-	"fmt"
-	"log"
+	"os"
 	"time"
 
 	cgClient "api.jacarandapp.com/src/coingecko/client"
 	cgTypes "api.jacarandapp.com/src/coingecko/types"
+
+	"github.com/go-kit/log"
+	"github.com/go-kit/log/level"
 )
+
+var logger log.Logger = log.NewLogfmtLogger(os.Stdout)
 
 const requestByMinute = 25
 const perPage = 150
@@ -15,7 +19,7 @@ const perPage = 150
 /* La data desde la API de coingecko devuelve un valor del tipo *types.CoinsMarket
 la informacion dentro es un json al que se le aplico unmarshal()
 Peso aprox de todos los datos 28MB */
-func GetMarketData(cg *cgClient.Client) ([]cgTypes.CoinMarketData, time.Time) {
+func GetMarketData(cg *cgClient.Client) []cgTypes.CoinMarketData {
 
 	ids := []string{}
 	vsCurrency := "usd"
@@ -28,7 +32,8 @@ func GetMarketData(cg *cgClient.Client) ([]cgTypes.CoinMarketData, time.Time) {
 	coinsList, err := cg.CoinsList(true)
 
 	if err != nil {
-		log.Fatal(err)
+		level.Error(logger).Log("msg", "Cannot get coin list in GetMarketData", "ts", log.DefaultTimestampUTC(), "err", err)
+
 	}
 
 	totalCoins := len(*coinsList)
@@ -46,7 +51,7 @@ func GetMarketData(cg *cgClient.Client) ([]cgTypes.CoinMarketData, time.Time) {
 		market, err := cg.CoinsMarket(vsCurrency, ids, order, perPage, page, sparkline, priceChangePercentage)
 
 		if err != nil {
-			fmt.Println(err)
+			level.Error(logger).Log("msg", "Cannot get market info in GetMarketData, waiting to retry", "ts", log.DefaultTimestampUTC, "err", err)
 			time.Sleep(time.Duration(time.Second * 60))
 			continue
 		}
@@ -65,7 +70,6 @@ func GetMarketData(cg *cgClient.Client) ([]cgTypes.CoinMarketData, time.Time) {
 					for key, value := range (*coinsList)[k].Platforms {
 
 						data.Platforms[key] = value
-
 					}
 
 					marketData = append(marketData, data)
@@ -74,12 +78,20 @@ func GetMarketData(cg *cgClient.Client) ([]cgTypes.CoinMarketData, time.Time) {
 			}
 		}
 
-		fmt.Println("Working on: ", page, "/", pagesToRequest)
+		completed := page * 100 / pagesToRequest
+
+		switch completed {
+		case 25:
+			level.Info(logger).Log("msg", "MarketData updating 25%% complete", "ts", log.DefaultTimestampUTC())
+		case 50:
+			level.Info(logger).Log("msg", "MarketData updating 50%% complete", "ts", log.DefaultTimestampUTC())
+		case 75:
+			level.Info(logger).Log("msg", "MarketData updating 75%% complete", "ts", log.DefaultTimestampUTC())
+		}
 
 		time.Sleep(time.Duration(time.Second * 60 / requestByMinute))
 		page++
 	}
 
-	lastUpdate := time.Now()
-	return marketData, lastUpdate
+	return marketData
 }
