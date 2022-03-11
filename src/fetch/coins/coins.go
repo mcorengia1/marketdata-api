@@ -44,6 +44,9 @@ func UpdateCoinsInfo(cg *cgClient.Client, dbClient *mongo.Client) {
 
 	for i := 0; i < lenCoinsList; i++ {
 
+		if (*coinsList)[i].ID == "" {
+			continue
+		}
 		coin, err := cg.CoinsID((*coinsList)[i].ID, true, true, true, true, true, true)
 
 		if err != nil {
