@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -22,6 +23,8 @@ import (
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
+
+	"github.com/adshao/go-binance/v2"
 )
 
 /* Market Data */
@@ -271,6 +274,28 @@ func reductedCoinsInfoByContract(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(elements)
 }
 
+type exchangeReq struct {
+	Key    string `json:"key" bson:"key"`
+	Secret string `json:"secret" bson:"secret"`
+	Limit  int    `json:"limit" bson:"limit"`
+}
+
+func binanceBalance(w http.ResponseWriter, r *http.Request) {
+	// Get access token
+	var exchange exchangeReq
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&exchange)
+
+	client := binance.NewClient(exchange.Key, exchange.Secret)
+
+	snapshot, err := client.NewGetAccountSnapshotService().Type("SPOT").Limit(exchange.Limit).Do(context.Background())
+
+	if err != nil {
+		level.Error(logger).Log("msg", "Binance balance req error", "ts", log.DefaultTimestampUTC(), "err", err)
+	}
+	json.NewEncoder(w).Encode(snapshot)
+}
+
 /* End Handlers */
 
 /* Router logic */
@@ -290,6 +315,8 @@ func handleRequest(r *mux.Router) {
 	r.HandleFunc("/coins/info/complete/contracts", completeCoinsInfoByContract).Queries("contracts", "{contracts}")
 
 	r.HandleFunc("/coins/info/reducted/contracts", reductedCoinsInfoByContract).Queries("platform", "{platform}", "contracts", "{contracts}")
+
+	r.HandleFunc("/balance/exchange/binance", binanceBalance)
 
 	err := http.ListenAndServe(":10000", r)
 	level.Error(logger).Log("msg", "Server handler error", "ts", log.DefaultTimestampUTC(), "err", err)
