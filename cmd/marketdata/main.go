@@ -25,6 +25,9 @@ import (
 	"github.com/go-kit/log/level"
 
 	"github.com/adshao/go-binance/v2"
+
+	"github.com/adrg/strutil"
+	"github.com/adrg/strutil/metrics"
 )
 
 /* Market Data */
@@ -45,6 +48,12 @@ const waitOnErrors = 60
 
 /* Loggers */
 var logger log.Logger = log.NewLogfmtLogger(os.Stdout)
+
+type exchangeReq struct {
+	Key    string `json:"key" bson:"key"`
+	Secret string `json:"secret" bson:"secret"`
+	Limit  int    `json:"limit" bson:"limit"`
+}
 
 func updateReductedInfo() {
 
@@ -274,26 +283,185 @@ func reductedCoinsInfoByContract(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(elements)
 }
 
-type exchangeReq struct {
-	Key    string `json:"key" bson:"key"`
-	Secret string `json:"secret" bson:"secret"`
-	Limit  int    `json:"limit" bson:"limit"`
+type exchangeAsset struct {
+	Symbol      string
+	BinanceName string
+	CurrentInfo cgTypes.ReductedCoinInfo
+	Holdings    [31]exchangeHolding
+}
+
+type exchangeHolding struct {
+	Date   int64
+	Free   string
+	Locked string
+	Price  float64
+}
+
+type exchangeResponse struct {
+	Name           string
+	Code           int
+	TodayValue     float32
+	YesterdayValue float32
+	WeekValue      float32
+	Assets         []exchangeAsset
 }
 
 func binanceBalance(w http.ResponseWriter, r *http.Request) {
 	// Get access token
-	var exchange exchangeReq
-	decoder := json.NewDecoder(r.Body)
-	err := decoder.Decode(&exchange)
+	// var exchange exchangeReq
+	// decoder := json.NewDecoder(r.Body)
+	// err := decoder.Decode(&exchange)
 
-	client := binance.NewClient(exchange.Key, exchange.Secret)
+	client := binance.NewClient("fYeYaE5Pk8Urmm7JvkgopE4PJfsn0Q97zGE0YRDZ2AfWHdCC3dRncquGTLcHPKrz", "gmmzWyh5ZCOSOCPIAXyKsWuQB9H1UAU1mMMxMiD6FgXdbPfOoscDL1baWEqdEvTz")
 
-	snapshot, err := client.NewGetAccountSnapshotService().Type("SPOT").Limit(exchange.Limit).Do(context.Background())
+	//snapshot, err := client.NewGetAccountSnapshotService().Type("SPOT").Limit(exchange.Limit).Do(context.Background())
+	snapshot, err := client.NewGetAccountSnapshotService().Type("SPOT").Limit(30).Do(context.Background())
+	allCoinsInfo, err := client.NewGetAllCoinsInfoService().Do(context.Background())
+
+	var response exchangeResponse
+	response.Name = "Binance"
+	response.Code = snapshot.Code
+
+	for i := len(snapshot.Snapshot) - 1; i >= 0; i-- {
+		//Recorro cada uno de los snapshot por dia
+
+		var holding exchangeHolding
+		holding.Date = snapshot.Snapshot[i].UpdateTime
+
+		for k := 0; k < len(snapshot.Snapshot[i].Data.Balances); k++ {
+			//Recorro cada balance de ese dia
+			if snapshot.Snapshot[i].Data.Balances[k].Free > "0" || snapshot.Snapshot[i].Data.Balances[k].Locked > "0" {
+				//Que tenga balance y no sea 0
+
+				//[0] es hace un mes
+				assetFound := false
+				for j := 0; j < len(response.Assets); j++ {
+					// Para cada balance recorro todos los balances ya guardados
+					if snapshot.Snapshot[i].Data.Balances[k].Asset == response.Assets[j].Symbol {
+						//ya existe tengo que append! response.asset[k].holdings[i]
+						assetFound = true
+						holding.Free = snapshot.Snapshot[i].Data.Balances[k].Free
+						holding.Locked = snapshot.Snapshot[i].Data.Balances[k].Locked
+						response.Assets[j].Holdings[len(snapshot.Snapshot)-i] = holding //Porque los guardo al reves
+					}
+				}
+				if !assetFound {
+					//No se encontro el asset entonces lo tengo que crear y agregar el holding
+					var asset exchangeAsset
+					asset.Symbol = snapshot.Snapshot[i].Data.Balances[k].Asset
+					holding.Free = snapshot.Snapshot[i].Data.Balances[k].Free
+					holding.Locked = snapshot.Snapshot[i].Data.Balances[k].Locked
+					asset.Holdings[len(snapshot.Snapshot)-i] = holding //Porque los guardo al reves
+					response.Assets = append(response.Assets, asset)
+				}
+			}
+		}
+	}
+
+	// Match the responses values with the all coin info values
+	for i := 0; i < len(allCoinsInfo); i++ {
+		free, _ := strconv.ParseFloat(allCoinsInfo[i].Free, 64)
+		locked, _ := strconv.ParseFloat(allCoinsInfo[i].Locked, 64)
+
+		if free > 0 || locked > 0 {
+			//Si hay un saldo recorro todo el response para encontrarlo
+
+			var holding exchangeHolding
+			holding.Date = time.Now().Unix()
+			holding.Free = allCoinsInfo[i].Free
+			holding.Locked = allCoinsInfo[i].Locked
+
+			var found = false
+			for k := 0; k < len(response.Assets); k++ {
+
+				if response.Assets[k].Symbol == allCoinsInfo[i].Coin {
+					found = true
+					response.Assets[k].BinanceName = allCoinsInfo[i].Name
+					response.Assets[k].Holdings[0] = holding
+				}
+			}
+
+			if !found {
+				//Tengo que agregar esta crypto que compraron hoy a los assets
+				var asset exchangeAsset
+				asset.BinanceName = allCoinsInfo[i].Name
+				asset.Symbol = allCoinsInfo[i].Coin
+				asset.Holdings[0] = holding
+
+				response.Assets = append(response.Assets, asset)
+			}
+		}
+	}
+	//Get reducted info for each one and load prices for the last 7 days
+	for i := 0; i < len(response.Assets); i++ {
+		//Recorro cada asset
+		var found = false
+		for k := 0; k < len(reductedCoinInfo); k++ {
+			//Para cada asset en ese dia
+
+			// if strings.EqualFold(reductedCoinInfo[k].Id, response.Assets[i].BinanceName) || strings.EqualFold(reductedCoinInfo[k].Name, response.Assets[i].BinanceName) {
+			// 	//Probably a match
+			// 	response.Assets[i].CurrentInfo = reductedCoinInfo[k]
+			// 	break
+			// }
+
+			if strings.EqualFold(reductedCoinInfo[k].Id, response.Assets[i].BinanceName) || strings.EqualFold(reductedCoinInfo[k].Name, response.Assets[i].BinanceName) ||
+				strings.EqualFold(reductedCoinInfo[k].Id, response.Assets[i].Symbol) || strings.EqualFold(reductedCoinInfo[k].Name, response.Assets[i].Symbol) {
+				//Probable match
+				found = true
+				response.Assets[i].CurrentInfo = reductedCoinInfo[k]
+				break
+			}
+		}
+
+		if !found {
+			//Busco por symbol
+
+			var matches []cgTypes.ReductedCoinInfo
+			for k := 0; k < len(reductedCoinInfo); k++ {
+				//Para cada asset en ese dia
+
+				if strings.EqualFold(reductedCoinInfo[k].Symbol, response.Assets[i].Symbol) {
+					//Symbol match I must check the names similarity
+					matches = append(matches, reductedCoinInfo[k])
+				}
+			}
+
+			if len(matches) > 1 {
+				//Si hubo mas de una coincidencia elijo la que tenga mayor string similarity
+				fmt.Println("More than one coincidence")
+				closestIndex := 0
+				closestSimilarity := 0
+				for k := 0; k < len(matches); k++ {
+					//swg := metrics.NewSmithWatermanGotoh()
+					swg := metrics.NewSmithWatermanGotoh()
+					swg.CaseSensitive = false
+					similarity := strutil.Similarity(reductedCoinInfo[k].Name, response.Assets[i].BinanceName, swg)
+
+					if similarity > float64(closestSimilarity) {
+						closestIndex = k
+					}
+				}
+				response.Assets[i].CurrentInfo = matches[closestIndex]
+
+			} else if len(matches) == 1 {
+				response.Assets[i].CurrentInfo = matches[0]
+			}
+		}
+
+		//Cada asset ya tiene su reducted info, ahora lo uso para ponerle los price a los holdings de los ultimos 7 dias
+		for k := 0; k < 7; k++ {
+			var priceIndex = len(response.Assets[i].CurrentInfo.SparkLine) - 1 - k*(len(response.Assets[i].CurrentInfo.SparkLine)/7)
+			response.Assets[i].Holdings[k+1].Price = response.Assets[i].CurrentInfo.SparkLine[priceIndex]
+		}
+		response.Assets[i].Holdings[0].Price = response.Assets[i].CurrentInfo.CurrentPrice
+
+	}
 
 	if err != nil {
 		level.Error(logger).Log("msg", "Binance balance req error", "ts", log.DefaultTimestampUTC(), "err", err)
 	}
-	json.NewEncoder(w).Encode(snapshot)
+	json.NewEncoder(w).Encode(response)
 }
 
 /* End Handlers */

@@ -8,6 +8,7 @@ require (
 )
 
 require (
+	github.com/adrg/strutil v0.2.3 // indirect
 	github.com/adshao/go-binance/v2 v2.3.5 // indirect
 	github.com/bitly/go-simplejson v0.5.0 // indirect
 	github.com/go-kit/kit v0.12.0 // indirect
