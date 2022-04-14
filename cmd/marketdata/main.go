@@ -299,12 +299,11 @@ type exchangeHolding struct {
 }
 
 type exchangeResponse struct {
-	Name           string
-	Code           int
-	TodayValue     float32
-	YesterdayValue float32
-	WeekValue      float32
-	Assets         []exchangeAsset
+	Name       string
+	Code       int
+	Valuations []float32
+	Profits    []float32
+	Assets     []exchangeAsset
 }
 
 func binanceBalance(w http.ResponseWriter, r *http.Request) {
@@ -313,7 +312,7 @@ func binanceBalance(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&exchange)
 
-	client := binance.NewClient("fYeYaE5Pk8Urmm7JvkgopE4PJfsn0Q97zGE0YRDZ2AfWHdCC3dRncquGTLcHPKrz", "gmmzWyh5ZCOSOCPIAXyKsWuQB9H1UAU1mMMxMiD6FgXdbPfOoscDL1baWEqdEvTz")
+	client := binance.NewClient(exchange.Key, exchange.Secret)
 
 	snapshot, err := client.NewGetAccountSnapshotService().Type("SPOT").Limit(30).Do(context.Background())
 	allCoinsInfo, err := client.NewGetAllCoinsInfoService().Do(context.Background())
