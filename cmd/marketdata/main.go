@@ -122,7 +122,7 @@ func updateMarketData() {
 func updateAllMarketData() {
 	defer errManagment()
 
-	marketData = fetchData.GetMarketData(cg)
+	marketData = fetchData.GetMarketData(cg, marketData)
 	updateReductedMarketData()
 
 	// Price
