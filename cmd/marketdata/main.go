@@ -62,7 +62,7 @@ func updateReductedInfo() {
 
 	reductedCoinInfo = coinsInfo.GetReductedCoinsInfo(mongo.Client)
 	updateReductedMarketData()
-	level.Info(logger).Log("msg", "Reducted Info synchronized with the database", "ts", log.DefaultTimestampUTC())
+	level.Info(logger).Log("msg", "Reducted Info synchronized with the database", "elements", len(reductedCoinInfo), "ts", log.DefaultTimestampUTC())
 
 	for {
 		select {
@@ -72,7 +72,7 @@ func updateReductedInfo() {
 			reductedCoinInfo = coinsInfo.GetReductedCoinsInfo(mongo.Client)
 			updateReductedMarketData()
 
-			level.Info(logger).Log("msg", "Reducted Info synchronized with the database", "ts", log.DefaultTimestampUTC())
+			level.Info(logger).Log("msg", "Reducted Info synchronized with the database", "elements", len(reductedCoinInfo), "ts", log.DefaultTimestampUTC())
 		}
 	}
 
@@ -108,6 +108,7 @@ func updateReductedMarketData() {
 func updateCoinInfo() {
 	for {
 		coinsInfo.UpdateCoinsInfo(cg, mongo.Client)
+		level.Info(logger).Log("msg", "Coins info updated", "ts", log.DefaultTimestampUTC())
 	}
 }
 
@@ -160,7 +161,7 @@ func updateAllMarketData() {
 	volumeDesc = make([]cgTypes.CoinMarketData, len(marketData))
 	copy(volumeDesc, marketData)
 
-	level.Info(logger).Log("msg", "Market data updated", "ts", log.DefaultTimestampUTC())
+	level.Info(logger).Log("msg", "Market data updated", "elements", len(marketData), "ts", log.DefaultTimestampUTC())
 	orderedCoinsReady = true
 }
 
@@ -312,16 +313,16 @@ func binanceBalance(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&exchange)
 
-	client := binance.NewClient(exchange.Key, exchange.Secret)
+	client := binance.NewClient("fYeYaE5Pk8Urmm7JvkgopE4PJfsn0Q97zGE0YRDZ2AfWHdCC3dRncquGTLcHPKrz", "gmmzWyh5ZCOSOCPIAXyKsWuQB9H1UAU1mMMxMiD6FgXdbPfOoscDL1baWEqdEvTz")
 
-	snapshot, err := client.NewGetAccountSnapshotService().Type("SPOT").Limit(exchange.Limit).Do(context.Background())
+	snapshot, err := client.NewGetAccountSnapshotService().Type("SPOT").Limit(30).Do(context.Background())
 	allCoinsInfo, err := client.NewGetAllCoinsInfoService().Do(context.Background())
 
 	var response exchangeResponse
 	response.Name = "Binance"
 	response.Code = snapshot.Code
 
-	for i := len(snapshot.Snapshot) - 1; i >= 0; i-- {
+	for i := len(snapshot.Snapshot) - 1; i > 0; i-- {
 		//Recorro cada uno de los snapshot por dia
 
 		var holding exchangeHolding
@@ -391,6 +392,7 @@ func binanceBalance(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
 	//Get reducted info for each one and load prices for the last 7 days
 	for i := 0; i < len(response.Assets); i++ {
 		//Recorro cada asset
@@ -398,15 +400,9 @@ func binanceBalance(w http.ResponseWriter, r *http.Request) {
 		for k := 0; k < len(reductedCoinInfo); k++ {
 			//Para cada asset en ese dia
 
-			// if strings.EqualFold(reductedCoinInfo[k].Id, response.Assets[i].BinanceName) || strings.EqualFold(reductedCoinInfo[k].Name, response.Assets[i].BinanceName) {
-			// 	//Probably a match
-			// 	response.Assets[i].CurrentInfo = reductedCoinInfo[k]
-			// 	break
-			// }
-
 			if strings.EqualFold(reductedCoinInfo[k].Id, response.Assets[i].BinanceName) || strings.EqualFold(reductedCoinInfo[k].Name, response.Assets[i].BinanceName) ||
 				strings.EqualFold(reductedCoinInfo[k].Id, response.Assets[i].Symbol) || strings.EqualFold(reductedCoinInfo[k].Name, response.Assets[i].Symbol) {
-				//Probable match
+				//Likely match
 				found = true
 				response.Assets[i].CurrentInfo = reductedCoinInfo[k]
 				break
@@ -423,6 +419,7 @@ func binanceBalance(w http.ResponseWriter, r *http.Request) {
 				if strings.EqualFold(reductedCoinInfo[k].Symbol, response.Assets[i].Symbol) {
 					//Symbol match I must check the names similarity
 					matches = append(matches, reductedCoinInfo[k])
+					found = true
 				}
 			}
 
@@ -448,13 +445,14 @@ func binanceBalance(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		//Cada asset ya tiene su reducted info, ahora lo uso para ponerle los price a los holdings de los ultimos 7 dias
-		for k := 0; k < 7; k++ {
-			var priceIndex = len(response.Assets[i].CurrentInfo.SparkLine) - 1 - k*(len(response.Assets[i].CurrentInfo.SparkLine)/7)
-			response.Assets[i].Holdings[k+1].Price = response.Assets[i].CurrentInfo.SparkLine[priceIndex]
+		if len(response.Assets[i].CurrentInfo.SparkLine) > 0 {
+			//Si hay coinData cargo los precios con la sparkline
+			for k := 0; k < 7; k++ {
+				var priceIndex = len(response.Assets[i].CurrentInfo.SparkLine) - 1 - k*(len(response.Assets[i].CurrentInfo.SparkLine)/7) //9,k=0 ** 9-6*(10/7)
+				response.Assets[i].Holdings[k+1].Price = response.Assets[i].CurrentInfo.SparkLine[priceIndex]
+			}
 		}
 		response.Assets[i].Holdings[0].Price = response.Assets[i].CurrentInfo.CurrentPrice
-
 	}
 
 	if err != nil {
