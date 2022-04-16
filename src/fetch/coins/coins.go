@@ -16,7 +16,9 @@ import (
 	"github.com/go-kit/log/level"
 )
 
-const requestByMinute = 10
+const requestByMinute = 40
+
+//const requestByMinute = 10
 
 var mongo_database = os.Getenv("MONGO_DATABASE")
 var logger log.Logger = log.NewLogfmtLogger(os.Stdout)
@@ -42,65 +44,95 @@ func UpdateCoinsInfo(cg *cgClient.Client, dbClient *mongo.Client) {
 	/* Connect to the database */
 	coll := dbClient.Database(mongo_database).Collection("coins_info")
 
+	//Obtengo una lista de lo que falta en la db
+	var coinListToAdd []cgTypes.CoinsListItem
 	for i := 0; i < lenCoinsList; i++ {
 
 		if (*coinsList)[i].ID == "" {
 			continue
 		}
-		coin, err := cg.CoinsID((*coinsList)[i].ID, true, true, true, true, true, true)
 
-		if err != nil {
-			level.Error(logger).Log("msg", "CoinInfo request failed, waiting to retry", "ts", log.DefaultTimestampUTC(), "err", err)
-			time.Sleep(time.Duration(time.Second * 60))
-			level.Info(logger).Log("msg", "Continuing with coinInfo requests", "ts", log.DefaultTimestampUTC())
-			i--
-			continue
+		result := coll.FindOne(context.Background(), bson.D{{"id", (*coinsList)[i].ID}})
 
-		} else if coin.ID != (*coinsList)[i].ID {
-			//Si hay un error o por alguna razon no se trajo el elemento correcto se repite
-			level.Error(logger).Log("msg", "Invalid Coininfo provided by server, waiting to retry", "ts", log.DefaultTimestampUTC(), "err", err)
-			time.Sleep(time.Duration(time.Second * 60))
-			level.Info(logger).Log("msg", "Continuing with coinInfo requests", "ts", log.DefaultTimestampUTC())
-			i--
-			continue
+		if result.Err() != nil {
+			// elemento no encontrado
+			coinListToAdd = append(coinListToAdd, (*coinsList)[i])
+		}
+	}
+	level.Info(logger).Log("msg", "CoinInfo database check done", "elements to add", len(coinListToAdd), "ts", log.DefaultTimestampUTC())
 
-		} else {
+	//Si no hay que agregar nada me dedico a actualizar los elementos y sino empiezo a agregar los que faltan
+	if len(coinListToAdd) > 0 {
+		//add elements
+		for i := 0; i < len(coinListToAdd); i++ {
+			fmt.Println(i)
 
-			result, err := coll.ReplaceOne(context.Background(), bson.D{{"id", coin.ID}}, cgClient.CoinInfoDBCreate(*coin))
+			coin, err := cg.CoinsID((coinListToAdd)[i].ID, true, true, true, true, true, true)
 
-			if err != nil {
-				level.Error(logger).Log("msg", "Coininfo database update element failed", "ts", log.DefaultTimestampUTC(), "err", err)
-			}
-
-			if result.ModifiedCount == 0 {
+			if err != nil || coin.ID != (coinListToAdd)[i].ID {
+				//Si hay un error o por alguna razon no se trajo el elemento correcto se repite
+				level.Error(logger).Log("msg", "CoinInfo request failed, waiting to retry", "id", (*coinsList)[i].ID, "err", err, "ts", log.DefaultTimestampUTC())
+				time.Sleep(time.Duration(time.Second * 60))
+				level.Info(logger).Log("msg", "Continuing with coinInfo requests", "ts", log.DefaultTimestampUTC())
+				i--
+				continue
+			} else {
 				_, err = coll.InsertOne(context.Background(), cgClient.CoinInfoDBCreate(*coin))
 
 				if err != nil {
 					level.Error(logger).Log("msg", "Coininfo database insert new element failed", "ts", log.DefaultTimestampUTC(), "err", err)
 				}
 			}
+
+			completed := i * 100 / len(coinListToAdd)
+			switch completed {
+			case 25:
+				level.Info(logger).Log("msg", "CoinInfo updating 25%% complete", "ts", log.DefaultTimestampUTC())
+			case 50:
+				level.Info(logger).Log("msg", "CoinInfo updating 50%% complete", "ts", log.DefaultTimestampUTC())
+			case 75:
+				level.Info(logger).Log("msg", "CoinInfo updating 75%% complete", "ts", log.DefaultTimestampUTC())
+			}
+			time.Sleep(time.Duration(time.Second * 60 / requestByMinute))
 		}
+	} else {
+		//update elements
+		for i := 0; i < len(*coinsList); i++ {
+			coin, errReq := cg.CoinsID((*coinsList)[i].ID, true, true, true, true, true, true)
+			result, errDB := coll.ReplaceOne(context.Background(), bson.D{{"id", coin.ID}}, cgClient.CoinInfoDBCreate(*coin))
 
-		completed := i * 100 / lenCoinsList
+			if errReq != nil || coin.ID != (*coinsList)[i].ID {
+				level.Error(logger).Log("msg", "Coininfo database update request failed", "ts", log.DefaultTimestampUTC(), "err", errReq)
+				i--
+				continue
 
-		switch completed {
-		case 25:
-			level.Info(logger).Log("msg", "CoinInfo db updating 25%% complete", "ts", log.DefaultTimestampUTC())
-		case 50:
-			level.Info(logger).Log("msg", "CoinInfo db updating 50%% complete", "ts", log.DefaultTimestampUTC())
-		case 75:
-			level.Info(logger).Log("msg", "CoinInfo db updating 75%% complete", "ts", log.DefaultTimestampUTC())
+			} else if errDB != nil {
+				level.Error(logger).Log("msg", "Coininfo database update database failed", "ts", log.DefaultTimestampUTC(), "err", errDB)
+				i--
+				continue
+
+			} else if result.ModifiedCount == 0 {
+				level.Error(logger).Log("msg", "Coininfo database update not modified documents", "ts", log.DefaultTimestampUTC(), "err", err)
+			}
+
+			completed := i * 100 / len(*coinsList)
+			switch completed {
+			case 25:
+				level.Info(logger).Log("msg", "CoinInfo updating 25%% complete", "ts", log.DefaultTimestampUTC())
+			case 50:
+				level.Info(logger).Log("msg", "CoinInfo updating 50%% complete", "ts", log.DefaultTimestampUTC())
+			case 75:
+				level.Info(logger).Log("msg", "CoinInfo updating 75%% complete", "ts", log.DefaultTimestampUTC())
+			}
+			time.Sleep(time.Duration(time.Second * 60 / requestByMinute))
 		}
-
-		//Tiempo de espera segun el limite de peticiones al servidor de coingecko
-		time.Sleep(time.Duration(time.Second * 60 / requestByMinute))
 	}
 
+	// logs
 	lastUpdate := time.Now()
 	fetchDuration := lastUpdate.Sub(fetchStart)
-
-	level.Info(logger).Log("msg", "CoinInfo database updated", "update_duration", fetchDuration, "ts", log.DefaultTimestampUTC())
-	fmt.Println(fetchDuration)
+	dbSize, err := coll.CountDocuments(context.Background(), bson.D{})
+	level.Info(logger).Log("msg", "CoinInfo database updated", "update_duration", fetchDuration, "database size", dbSize, "ts", log.DefaultTimestampUTC())
 }
 
 func GetCoinInfoById(mongoClient *mongo.Client, id string) cgTypes.CoinInfoDB {

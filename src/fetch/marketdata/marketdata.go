@@ -13,8 +13,11 @@ import (
 
 var logger log.Logger = log.NewLogfmtLogger(os.Stdout)
 
-const requestByMinute = 25
+const requestByMinute = 1
 const perPage = 150
+
+// const requestByMinute = 25
+// const perPage = 150
 
 /* La data desde la API de coingecko devuelve un valor del tipo *types.CoinsMarket
 la informacion dentro es un json al que se le aplico unmarshal()
@@ -93,17 +96,6 @@ func GetMarketData(cg *cgClient.Client, currentMktData []cgTypes.CoinMarketData)
 				}
 				newMarketData = append(newMarketData, data)
 			}
-		}
-
-		completed := page * 100 / pagesToRequest
-
-		switch completed {
-		case 25:
-			level.Info(logger).Log("msg", "MarketData updating 25%% complete", "ts", log.DefaultTimestampUTC())
-		case 50:
-			level.Info(logger).Log("msg", "MarketData updating 50%% complete", "ts", log.DefaultTimestampUTC())
-		case 75:
-			level.Info(logger).Log("msg", "MarketData updating 75%% complete", "ts", log.DefaultTimestampUTC())
 		}
 
 		time.Sleep(time.Duration(time.Second * 60 / requestByMinute))
