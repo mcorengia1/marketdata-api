@@ -16,9 +16,9 @@ import (
 	"github.com/go-kit/log/level"
 )
 
-const requestByMinute = 40
-
-//const requestByMinute = 10
+// Testing value
+//const requestByMinute = 40
+const requestByMinute = 10
 
 var mongo_database = os.Getenv("MONGO_DATABASE")
 var logger log.Logger = log.NewLogfmtLogger(os.Stdout)

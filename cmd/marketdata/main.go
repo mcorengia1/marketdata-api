@@ -307,11 +307,11 @@ type exchangeResponse struct {
 
 func binanceBalance(w http.ResponseWriter, r *http.Request) {
 	// Get access token
-	// var exchange exchangeReq
-	// decoder := json.NewDecoder(r.Body)
-	// err := decoder.Decode(&exchange)
+	var exchange exchangeReq
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&exchange)
 
-	client := binance.NewClient("fYeYaE5Pk8Urmm7JvkgopE4PJfsn0Q97zGE0YRDZ2AfWHdCC3dRncquGTLcHPKrz", "gmmzWyh5ZCOSOCPIAXyKsWuQB9H1UAU1mMMxMiD6FgXdbPfOoscDL1baWEqdEvTz")
+	client := binance.NewClient(exchange.Key, exchange.Secret)
 
 	snapshot, err := client.NewGetAccountSnapshotService().Type("SPOT").Limit(30).Do(context.Background())
 	allCoinsInfo, err := client.NewGetAllCoinsInfoService().Do(context.Background())
