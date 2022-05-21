@@ -467,19 +467,19 @@ func handleRequest(r *mux.Router) {
 
 	//El routeo va en orden de la ruta mas especifica a la menos especifica
 
-	r.HandleFunc("mktdata/coins/marketdata/ordered", orderedCoins).Queries("order", "{order}", "start", "{start:[0-9]+}", "end", "{end:[0-9]+}")
+	r.HandleFunc("/mktdata/coins/marketdata/ordered", orderedCoins).Queries("order", "{order}", "start", "{start:[0-9]+}", "end", "{end:[0-9]+}")
 
-	r.HandleFunc("mktdata/coins/marketdata/ids", coinsById).Queries("ids", "{ids}")
+	r.HandleFunc("/mktdata/coins/marketdata/ids", coinsById).Queries("ids", "{ids}")
 
-	r.HandleFunc("mktdata/coins/marketdata/contracts", coinsByContract).Queries("platform", "{platform}", "contracts", "{contracts}")
+	r.HandleFunc("/mktdata/coins/marketdata/contracts", coinsByContract).Queries("platform", "{platform}", "contracts", "{contracts}")
 
-	r.HandleFunc("mktdata/coins/info/complete/ids", completeCoinsInfoById).Queries("ids", "{ids}")
+	r.HandleFunc("/mktdata/coins/info/complete/ids", completeCoinsInfoById).Queries("ids", "{ids}")
 
-	r.HandleFunc("mktdata/coins/info/complete/contracts", completeCoinsInfoByContract).Queries("contracts", "{contracts}")
+	r.HandleFunc("/mktdata/coins/info/complete/contracts", completeCoinsInfoByContract).Queries("contracts", "{contracts}")
 
-	r.HandleFunc("mktdata/coins/info/reducted/contracts", reductedCoinsInfoByContract).Queries("platform", "{platform}", "contracts", "{contracts}")
+	r.HandleFunc("/mktdata/coins/info/reducted/contracts", reductedCoinsInfoByContract).Queries("platform", "{platform}", "contracts", "{contracts}")
 
-	r.HandleFunc("mktdata/balance/exchange/binance", binanceBalance)
+	r.HandleFunc("/mktdata/balance/exchange/binance", binanceBalance)
 
 	err := http.ListenAndServe(":10000", r)
 	level.Error(logger).Log("msg", "Server handler error", "ts", log.DefaultTimestampUTC(), "err", err)
