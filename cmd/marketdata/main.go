@@ -28,6 +28,8 @@ import (
 
 	"github.com/adrg/strutil"
 	"github.com/adrg/strutil/metrics"
+
+	"github.com/rs/cors"
 )
 
 /* Market Data */
@@ -481,7 +483,14 @@ func handleRequest(r *mux.Router) {
 
 	r.HandleFunc("/mktdata/balance/exchange/binance", binanceBalance)
 
-	err := http.ListenAndServe(":10000", r)
+	c := cors.New(cors.Options{
+		AllowCredentials: true,
+		AllowedOrigins:   []string{"http://jacarandapp.com", "https://jacarandapp.com"},
+	})
+	//AllowedOrigins: []string{"http://localhost:3000"},
+
+	handler := c.Handler(r)
+	err := http.ListenAndServe(":10000", handler)
 	level.Error(logger).Log("msg", "Server handler error", "ts", log.DefaultTimestampUTC(), "err", err)
 }
 
