@@ -485,7 +485,7 @@ func handleRequest(r *mux.Router) {
 
 	c := cors.New(cors.Options{
 		AllowCredentials: true,
-		AllowedOrigins:   []string{"http://jacarandapp.com", "https://jacarandapp.com"},
+		AllowedOrigins:   []string{"http://jacarandapp.com", "https://jacarandapp.com", "http://www.jacarandapp.com", "https://www.jacarandapp.com"},
 	})
 	//AllowedOrigins: []string{"http://localhost:3000"},
 
