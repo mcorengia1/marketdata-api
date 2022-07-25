@@ -11,8 +11,11 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	coinsInfo "api.jacarandapp.com/src/fetch/coins"
+	historical "api.jacarandapp.com/src/fetch/historical"
 	fetchData "api.jacarandapp.com/src/fetch/marketdata"
 	sorting "api.jacarandapp.com/src/sorting"
 
@@ -20,6 +23,8 @@ import (
 	cgTypes "api.jacarandapp.com/src/coingecko/types"
 
 	mongo "api.jacarandapp.com/src/controllers/mongo"
+
+	Utils "api.jacarandapp.com/src/utils"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
@@ -31,6 +36,12 @@ import (
 
 	"github.com/rs/cors"
 )
+
+type exchangeReq struct {
+	Key    string `json:"key" bson:"key"`
+	Secret string `json:"secret" bson:"secret"`
+	Limit  int    `json:"limit" bson:"limit"`
+}
 
 /* Market Data */
 var marketData []cgTypes.CoinMarketData
@@ -50,12 +61,6 @@ const waitOnErrors = 60
 
 /* Loggers */
 var logger log.Logger = log.NewLogfmtLogger(os.Stdout)
-
-type exchangeReq struct {
-	Key    string `json:"key" bson:"key"`
-	Secret string `json:"secret" bson:"secret"`
-	Limit  int    `json:"limit" bson:"limit"`
-}
 
 func updateReductedInfo() {
 
@@ -114,9 +119,27 @@ func updateCoinInfo() {
 }
 
 func updateMarketData() {
-
 	for {
 		updateAllMarketData()
+	}
+}
+
+func updateHistoricalData() {
+	historical.UpdateHistoricalDB(cg, mongo.Client)
+	//historical.UpdateHistoricalMktData(cg, mongo.Client, &marketData)
+
+	for range time.Tick(time.Minute * 60) {
+		//Son las 00:00 +-1hour
+
+		historical.UpdateHistoricalMktData(cg, mongo.Client, &marketData)
+
+		if time.Now().UTC().Hour() == 23 || time.Now().UTC().Hour() == 0 {
+
+			if orderedCoinsReady {
+				historical.UpdateHistoricalMktData(cg, mongo.Client, &marketData)
+				historical.UpdateHistoricalDB(cg, mongo.Client)
+			}
+		}
 	}
 }
 
@@ -170,25 +193,6 @@ func updateAllMarketData() {
 
 /* Handlers */
 
-func getElementsById(elements *[]cgTypes.CoinMarketData, ids *[]string) []cgTypes.CoinMarketData {
-
-	elementsLen := len(*elements)
-	idsLen := len(*ids)
-
-	var elementsById []cgTypes.CoinMarketData
-
-	for i := 0; i < elementsLen; i++ {
-
-		for k := 0; k < idsLen; k++ {
-
-			if (*elements)[i].MarketData.ID == (*ids)[k] {
-				elementsById = append(elementsById, (*elements)[i])
-			}
-		}
-	}
-	return elementsById
-}
-
 func coinsById(w http.ResponseWriter, r *http.Request) {
 	/* Las peticiones de ids se hacen separadas por %2C que es
 	el equivalente a una " , " cuando es recibido por la api */
@@ -200,9 +204,8 @@ func coinsById(w http.ResponseWriter, r *http.Request) {
 		ids := strings.Split(vars["ids"], ",")
 
 		//Entrego la informacion basica de esos ids
-		elements := getElementsById(&marketData, &ids)
+		elements := Utils.GetElementsById(&marketData, &ids)
 		json.NewEncoder(w).Encode(elements)
-
 	}
 }
 
@@ -315,18 +318,19 @@ func binanceBalance(w http.ResponseWriter, r *http.Request) {
 
 	client := binance.NewClient(exchange.Key, exchange.Secret)
 
-	snapshot, err := client.NewGetAccountSnapshotService().Type("SPOT").Limit(30).Do(context.Background())
+	snapshot, err := client.NewGetAccountSnapshotService().Type("SPOT").Limit(exchange.Limit).Do(context.Background())
 	allCoinsInfo, err := client.NewGetAllCoinsInfoService().Do(context.Background())
 
 	var response exchangeResponse
 	response.Name = "Binance"
 	response.Code = snapshot.Code
 
-	for i := len(snapshot.Snapshot) - 1; i > 0; i-- {
+	for i := len(snapshot.Snapshot) - 1; i >= 0; i-- {
 		//Recorro cada uno de los snapshot por dia
 
 		var holding exchangeHolding
-		holding.Date = snapshot.Snapshot[i].UpdateTime
+		// Viene en milisegundos y lo convierto a segundos
+		holding.Date = snapshot.Snapshot[i].UpdateTime / 1000
 
 		for k := 0; k < len(snapshot.Snapshot[i].Data.Balances); k++ {
 			//Recorro cada balance de ese dia
@@ -357,6 +361,7 @@ func binanceBalance(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	//response.Assets[0] == HOY / AHORA
 
 	// Match the responses values with the all coin info values
 	for i := 0; i < len(allCoinsInfo); i++ {
@@ -445,20 +450,174 @@ func binanceBalance(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		if len(response.Assets[i].CurrentInfo.SparkLine) > 0 {
+		//		if len(response.Assets[i].CurrentInfo.SparkLine) > 0 {
+		// Hubo match de assets
+		if response.Assets[i].CurrentInfo.Id != "" {
+
 			//Si hay coinData cargo los precios con la sparkline
-			for k := 0; k < 7; k++ {
-				var priceIndex = len(response.Assets[i].CurrentInfo.SparkLine) - 1 - k*(len(response.Assets[i].CurrentInfo.SparkLine)/7) //9,k=0 ** 9-6*(10/7)
-				response.Assets[i].Holdings[k+1].Price = response.Assets[i].CurrentInfo.SparkLine[priceIndex]
+			//response.Assets[i].CurrentInfo.Id
+			assetID := []string{response.Assets[i].CurrentInfo.Id}
+			historical := getHistoricalByIDs(assetID, time.Now().Add(-time.Hour*792).Unix(), time.Now().Unix()) // response.Assets[i].Holdings[0].Date
+
+			fmt.Println(response.Assets[i].BinanceName)
+			fmt.Println(historical)
+			fmt.Println(time.Now().Add(-time.Hour * 720).Unix())
+			fmt.Println(time.Now().Unix())
+			fmt.Println("**************************")
+
+			if len(historical[0].Data) == 0 {
+				//No historical data for that coin
+				continue
 			}
+
+			//Recorro cada holding[j] de cada asset[i]
+			//+1 por incluir el balance de AHORA
+			//el ultimo J deberia matchear con k=0
+			for j := 0; j < exchange.Limit+1; j++ {
+				//for j := len(exchange.Limit) ; j>=0;j++ {
+
+				// Comparo los dates hasta que coincidan con un margen de error aceptable
+				found := false
+				for k := 0; k < len(historical[0].Data); k++ {
+					//for k := len(historical[0].Data) - 1; k >= 0; k-- {
+
+					difference := historical[0].Data[k].Timestamp.Time().Unix() - response.Assets[i].Holdings[j].Date
+					if difference < 0 {
+						difference *= -1
+					}
+
+					fmt.Println("k: " + strconv.Itoa(k) + ", j: " + strconv.Itoa(j) + ", i: " + strconv.Itoa(i))
+					fmt.Println(difference)
+					fmt.Println(historical[0].Data[k].Timestamp.Time())
+					fmt.Println(time.Unix(response.Assets[i].Holdings[j].Date, 0))
+					fmt.Println(difference)
+
+					if difference < 3600 {
+						response.Assets[i].Holdings[j].Price = historical[0].Data[k].Price
+						found = true
+						break
+					}
+				}
+
+				if !found {
+					//no mktdata for that coin
+					fmt.Println("No mktdata for that date, taking the last value")
+					if j > 0 {
+						response.Assets[i].Holdings[j].Price = response.Assets[i].Holdings[j-1].Price
+					}
+				}
+
+				//j+1 ???
+				//response.Assets[i].Holdings[j].Price = historical[0].Data[exchange.Limit-j-1].Price
+				//var priceIndex = len(response.Assets[i].CurrentInfo.SparkLine) - 1 - j*(len(response.Assets[i].CurrentInfo.SparkLine)/7) //9,j=0 ** 9-6*(10/7)
+				//response.Assets[i].Holdings[j+1].Price = response.Assets[i].CurrentInfo.SparkLine[priceIndex]
+			}
+
+			response.Assets[i].Holdings[0].Price = response.Assets[i].CurrentInfo.CurrentPrice
 		}
-		response.Assets[i].Holdings[0].Price = response.Assets[i].CurrentInfo.CurrentPrice
 	}
 
 	if err != nil {
 		level.Error(logger).Log("msg", "Binance balance req error", "ts", log.DefaultTimestampUTC(), "err", err)
 	}
 	json.NewEncoder(w).Encode(response)
+}
+
+type History struct {
+	Timestamp primitive.DateTime `json:"timestamp" bson:"timestamp"`
+	Volume    float64            `json:"volume" bson:"volume"`
+	Price     float64            `json:"price" bson:"price"`
+	Marketcap float64            `json:"marketcap" bson:"marketcap"`
+}
+
+type HistoryResponse struct {
+	ID   string    `json:"id" bson:"id"`
+	Data []History `json:"history" bson:"history"`
+}
+
+func historicalByID(w http.ResponseWriter, r *http.Request) {
+
+	vars := mux.Vars(r)
+	ids := strings.Split(vars["ids"], ",")
+	start, _ := strconv.Atoi(vars["start"])
+	end, _ := strconv.Atoi(vars["end"])
+
+	json.NewEncoder(w).Encode(getHistoricalByIDs(ids, int64(start), int64(end)))
+}
+
+func getHistoricalByIDs(ids []string, start int64, end int64) []HistoryResponse {
+	//for each id look for a collection
+	//get the data in the given range
+	result := make([]HistoryResponse, len(ids))
+	db := mongo.Client.Database("historical")
+
+	// get current marketdata
+	currentMktData := Utils.GetElementsById(&marketData, &ids)
+
+	for i := 0; i < len(ids); i++ {
+
+		cursor, err := db.Collection(ids[i]).Find(context.Background(),
+			bson.M{
+				"timestamp": bson.M{
+					"$gte": primitive.NewDateTimeFromTime(time.Unix(start, 0)),
+					"$lte": primitive.NewDateTimeFromTime(time.Unix(end, 0)),
+				},
+			},
+		)
+		if err != nil {
+			level.Error(logger).Log("msg", "Error getting historical for", "id", ids[i], "ts", log.DefaultTimestampUTC(), "err", err)
+		}
+
+		var coinHistory []History
+		for cursor.Next(context.Background()) {
+
+			var aux History
+			cursor.Decode(&aux)
+			coinHistory = append(coinHistory, aux)
+
+		}
+
+		result[i].ID = ids[i]
+		result[i].Data = coinHistory
+
+		result[i].Data = append(result[i].Data, History{
+			Timestamp: primitive.NewDateTimeFromTime(time.Now().UTC()),
+			Volume:    currentMktData[i].MarketData.TotalVolume,
+			Price:     currentMktData[i].MarketData.CurrentPrice,
+			Marketcap: currentMktData[i].MarketData.MarketCap})
+	}
+
+	return result
+}
+
+func historicalByContract(w http.ResponseWriter, r *http.Request) {
+
+	vars := mux.Vars(r)
+	platform, _ := vars["platform"]
+	contracts := strings.Split(vars["contracts"], ",")
+
+	if platform != "" && len(contracts) != 0 {
+		start, _ := strconv.Atoi(vars["start"])
+		end, _ := strconv.Atoi(vars["end"])
+
+		var ids []string
+		for i := 0; i < len(marketData); i++ {
+
+			for j := 0; j < len(contracts); j++ {
+
+				if marketData[i].Platforms[platform] == contracts[j] {
+
+					ids = append(ids, marketData[i].MarketData.ID)
+				}
+			}
+		}
+		json.NewEncoder(w).Encode(getHistoricalByIDs(ids, int64(start), int64(end)))
+
+	} else {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(http.StatusText(http.StatusBadRequest)))
+	}
 }
 
 /* End Handlers */
@@ -470,6 +629,10 @@ func handleRequest(r *mux.Router) {
 	//El routeo va en orden de la ruta mas especifica a la menos especifica
 
 	r.HandleFunc("/mktdata/coins/marketdata/ordered", orderedCoins).Queries("order", "{order}", "start", "{start:[0-9]+}", "end", "{end:[0-9]+}")
+
+	r.HandleFunc("/mktdata/coins/marketdata/historical/ids", historicalByID).Queries("ids", "{ids}", "start", "{start:[0-9]+}", "end", "{end:[0-9]+}")
+
+	r.HandleFunc("/mktdata/coins/marketdata/historical/contracts", historicalByContract).Queries("platform", "{platform}", "contracts", "{contracts}", "start", "{start:[0-9]+}", "end", "{end:[0-9]+}")
 
 	r.HandleFunc("/mktdata/coins/marketdata/ids", coinsById).Queries("ids", "{ids}")
 
@@ -486,8 +649,8 @@ func handleRequest(r *mux.Router) {
 	c := cors.New(cors.Options{
 		AllowCredentials: true,
 		AllowedOrigins:   []string{"http://jacarandapp.com", "https://jacarandapp.com", "http://www.jacarandapp.com", "https://www.jacarandapp.com"},
+		//AllowedOrigins: []string{"http://localhost:3000"},
 	})
-	//AllowedOrigins: []string{"http://localhost:3000"},
 
 	handler := c.Handler(r)
 	err := http.ListenAndServe(":10000", handler)
@@ -545,7 +708,6 @@ func orderedCoins(w http.ResponseWriter, r *http.Request) {
 	default:
 		level.Error(logger).Log("msg", "Invalid requested order", "ts", log.DefaultTimestampUTC())
 	}
-
 }
 
 func errManagment() {
@@ -570,6 +732,7 @@ func main() {
 	go updateReductedInfo()
 	go updateMarketData()
 	go updateCoinInfo()
+	go updateHistoricalData()
 
 	router := mux.NewRouter()
 	handleRequest(router)

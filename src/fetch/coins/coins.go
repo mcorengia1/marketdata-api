@@ -173,6 +173,7 @@ func GetReductedCoinsInfo(mongoClient *mongo.Client) []cgTypes.ReductedCoinInfo 
 	coll := mongoClient.Database(mongo_database).Collection("coins_info")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	defer errManagment()
 
 	//Obtengo el cursor para iterar la coleccion
 	cursor, err := coll.Find(ctx, bson.D{})

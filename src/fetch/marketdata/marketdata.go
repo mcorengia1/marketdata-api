@@ -14,10 +14,11 @@ import (
 var logger log.Logger = log.NewLogfmtLogger(os.Stdout)
 
 // testing values
-// const requestByMinute = 1
-// const perPage = 150
-
 const requestByMinute = 25
+
+//const perPage = 150
+
+//const requestByMinute = 25
 const perPage = 150
 
 /* La data desde la API de coingecko devuelve un valor del tipo *types.CoinsMarket
@@ -62,26 +63,31 @@ func GetMarketData(cg *cgClient.Client, currentMktData []cgTypes.CoinMarketData)
 			continue
 		}
 
-		dataCount := len(*market)
-
 		/* Matcheo las diferentes marketdatas con sus platforms */
-		for i := 0; i < dataCount; i++ {
+		for i := 0; i < len(*market); i++ {
 
 			var found = false
-			var data cgTypes.CoinMarketData
 
-			for k := 0; k < len(newMarketData); k++ {
+			for j := 0; j < len(newMarketData); j++ {
 				// Para cada elemento recibido actualizo el anterior o si no esta lo agrego
 
-				if (*market)[i].ID == newMarketData[k].MarketData.ID {
+				if (*market)[i].ID == newMarketData[j].MarketData.ID {
 					found = true
-					newMarketData[k].MarketData = (*market)[i]
+					newMarketData[j].MarketData = (*market)[i]
 
-					data.Platforms = make(map[string]string)
-					for key, value := range (*coinsList)[i].Platforms {
-						data.Platforms[key] = value
+					var platforms map[string]string
+					for k := 0; k < len(*coinsList); k++ {
+
+						if (*coinsList)[k].ID == (*market)[i].ID {
+							platforms = (*coinsList)[k].Platforms
+							break
+						}
 					}
-					newMarketData[k].Platforms = data.Platforms
+					newMarketData[j].Platforms = make(map[string]string, len(platforms))
+
+					for key, value := range platforms {
+						newMarketData[j].Platforms[key] = value
+					}
 
 					break
 				}
@@ -89,10 +95,20 @@ func GetMarketData(cg *cgClient.Client, currentMktData []cgTypes.CoinMarketData)
 
 			if !found {
 				//Nuevo elemento lo tengo que agregar
+				var data cgTypes.CoinMarketData
 				data.MarketData = (*market)[i]
-				data.Platforms = make(map[string]string)
 
-				for key, value := range (*coinsList)[i].Platforms {
+				var platforms map[string]string
+				for j := 0; j < len(*coinsList); j++ {
+
+					if (*coinsList)[j].ID == (*market)[i].ID {
+						platforms = (*coinsList)[j].Platforms
+						break
+					}
+				}
+				data.Platforms = make(map[string]string, len(platforms))
+
+				for key, value := range platforms {
 					data.Platforms[key] = value
 				}
 				newMarketData = append(newMarketData, data)
