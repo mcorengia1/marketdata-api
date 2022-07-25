@@ -20,10 +20,10 @@ import (
 	"github.com/go-kit/log/level"
 )
 
-//const requestByMinute = 10
+const requestByMinute = 10
 
 //testing value
-const requestByMinute = 15
+//const requestByMinute = 15
 
 //var mongo_database = os.Getenv("MONGO_DATABASE")
 var mongo_database = "historical"
@@ -96,8 +96,6 @@ func UpdateHistoricalDB(cg *cgClient.Client, dbClient *mongo.Client) {
 			if err != nil {
 				level.Error(logger).Log("msg", "Error getting the market chart", "ts", log.DefaultTimestampUTC(), "err", err)
 			}
-
-			fmt.Println("No hay historico, traigo todo" + (*coinsList)[i].ID)
 		}
 	}
 }
@@ -257,7 +255,6 @@ func errManagment() {
 	recoverInfo := recover()
 	if recoverInfo != nil {
 		fmt.Println(recoverInfo)
-		fmt.Println("RECOVERING FROM HISTORICAL INFO")
 
 		fmt.Println("Waiting 60sec before continue with the requests")
 		time.Sleep(time.Duration(time.Second * waitOnErrors))

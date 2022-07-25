@@ -430,7 +430,6 @@ func binanceBalance(w http.ResponseWriter, r *http.Request) {
 
 			if len(matches) > 1 {
 				//Si hubo mas de una coincidencia elijo la que tenga mayor string similarity
-				fmt.Println("More than one coincidence")
 				closestIndex := 0
 				closestSimilarity := 0
 				for k := 0; k < len(matches); k++ {
@@ -459,12 +458,6 @@ func binanceBalance(w http.ResponseWriter, r *http.Request) {
 			assetID := []string{response.Assets[i].CurrentInfo.Id}
 			historical := getHistoricalByIDs(assetID, time.Now().Add(-time.Hour*792).Unix(), time.Now().Unix()) // response.Assets[i].Holdings[0].Date
 
-			fmt.Println(response.Assets[i].BinanceName)
-			fmt.Println(historical)
-			fmt.Println(time.Now().Add(-time.Hour * 720).Unix())
-			fmt.Println(time.Now().Unix())
-			fmt.Println("**************************")
-
 			if len(historical[0].Data) == 0 {
 				//No historical data for that coin
 				continue
@@ -486,12 +479,6 @@ func binanceBalance(w http.ResponseWriter, r *http.Request) {
 						difference *= -1
 					}
 
-					fmt.Println("k: " + strconv.Itoa(k) + ", j: " + strconv.Itoa(j) + ", i: " + strconv.Itoa(i))
-					fmt.Println(difference)
-					fmt.Println(historical[0].Data[k].Timestamp.Time())
-					fmt.Println(time.Unix(response.Assets[i].Holdings[j].Date, 0))
-					fmt.Println(difference)
-
 					if difference < 3600 {
 						response.Assets[i].Holdings[j].Price = historical[0].Data[k].Price
 						found = true
@@ -501,7 +488,6 @@ func binanceBalance(w http.ResponseWriter, r *http.Request) {
 
 				if !found {
 					//no mktdata for that coin
-					fmt.Println("No mktdata for that date, taking the last value")
 					if j > 0 {
 						response.Assets[i].Holdings[j].Price = response.Assets[i].Holdings[j-1].Price
 					}
@@ -648,8 +634,8 @@ func handleRequest(r *mux.Router) {
 
 	c := cors.New(cors.Options{
 		AllowCredentials: true,
-		AllowedOrigins:   []string{"http://jacarandapp.com", "https://jacarandapp.com", "http://www.jacarandapp.com", "https://www.jacarandapp.com"},
-		//AllowedOrigins: []string{"http://localhost:3000"},
+		//AllowedOrigins:   []string{"http://jacarandapp.com", "https://jacarandapp.com", "http://www.jacarandapp.com", "https://www.jacarandapp.com"},
+		AllowedOrigins: []string{"http://localhost:3000"},
 	})
 
 	handler := c.Handler(r)

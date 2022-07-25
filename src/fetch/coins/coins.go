@@ -18,6 +18,7 @@ import (
 
 // Testing value
 //const requestByMinute = 40
+
 const requestByMinute = 10
 
 var mongo_database = os.Getenv("MONGO_DATABASE")
@@ -65,8 +66,6 @@ func UpdateCoinsInfo(cg *cgClient.Client, dbClient *mongo.Client) {
 	if len(coinListToAdd) > 0 {
 		//add elements
 		for i := 0; i < len(coinListToAdd); i++ {
-			fmt.Println(i)
-
 			coin, err := cg.CoinsID((coinListToAdd)[i].ID, true, true, true, true, true, true)
 
 			if err != nil || coin.ID != (coinListToAdd)[i].ID {
