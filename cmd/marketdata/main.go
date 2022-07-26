@@ -125,9 +125,6 @@ func updateMarketData() {
 }
 
 func updateHistoricalData() {
-	historical.UpdateHistoricalDB(cg, mongo.Client)
-	//historical.UpdateHistoricalMktData(cg, mongo.Client, &marketData)
-
 	for range time.Tick(time.Minute * 60) {
 		//Son las 00:00 +-1hour
 
