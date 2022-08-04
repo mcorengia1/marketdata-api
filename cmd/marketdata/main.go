@@ -308,6 +308,7 @@ type exchangeResponse struct {
 }
 
 func binanceBalance(w http.ResponseWriter, r *http.Request) {
+
 	// Get access token
 	var exchange exchangeReq
 	decoder := json.NewDecoder(r.Body)
@@ -476,7 +477,8 @@ func binanceBalance(w http.ResponseWriter, r *http.Request) {
 						difference *= -1
 					}
 
-					if difference < 3600 {
+					//Diff of 2 hours max
+					if difference < 7200 {
 						response.Assets[i].Holdings[j].Price = historical[0].Data[k].Price
 						found = true
 						break
@@ -503,6 +505,8 @@ func binanceBalance(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		level.Error(logger).Log("msg", "Binance balance req error", "ts", log.DefaultTimestampUTC(), "err", err)
 	}
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
 
@@ -537,40 +541,45 @@ func getHistoricalByIDs(ids []string, start int64, end int64) []HistoryResponse 
 	// get current marketdata
 	currentMktData := Utils.GetElementsById(&marketData, &ids)
 
-	for i := 0; i < len(ids); i++ {
+	if len(currentMktData) == 0 {
+		return result
 
-		cursor, err := db.Collection(ids[i]).Find(context.Background(),
-			bson.M{
-				"timestamp": bson.M{
-					"$gte": primitive.NewDateTimeFromTime(time.Unix(start, 0)),
-					"$lte": primitive.NewDateTimeFromTime(time.Unix(end, 0)),
+	} else {
+		for i := 0; i < len(ids); i++ {
+
+			cursor, err := db.Collection(ids[i]).Find(context.Background(),
+				bson.M{
+					"timestamp": bson.M{
+						"$gte": primitive.NewDateTimeFromTime(time.Unix(start, 0)),
+						"$lte": primitive.NewDateTimeFromTime(time.Unix(end, 0)),
+					},
 				},
-			},
-		)
-		if err != nil {
-			level.Error(logger).Log("msg", "Error getting historical for", "id", ids[i], "ts", log.DefaultTimestampUTC(), "err", err)
+			)
+			if err != nil {
+				level.Error(logger).Log("msg", "Error getting historical for", "id", ids[i], "ts", log.DefaultTimestampUTC(), "err", err)
+			}
+
+			var coinHistory []History
+			for cursor.Next(context.Background()) {
+
+				var aux History
+				cursor.Decode(&aux)
+				coinHistory = append(coinHistory, aux)
+
+			}
+
+			result[i].ID = ids[i]
+			result[i].Data = coinHistory
+
+			result[i].Data = append(result[i].Data, History{
+				Timestamp: primitive.NewDateTimeFromTime(time.Now().UTC()),
+				Volume:    currentMktData[i].MarketData.TotalVolume,
+				Price:     currentMktData[i].MarketData.CurrentPrice,
+				Marketcap: currentMktData[i].MarketData.MarketCap})
 		}
 
-		var coinHistory []History
-		for cursor.Next(context.Background()) {
-
-			var aux History
-			cursor.Decode(&aux)
-			coinHistory = append(coinHistory, aux)
-
-		}
-
-		result[i].ID = ids[i]
-		result[i].Data = coinHistory
-
-		result[i].Data = append(result[i].Data, History{
-			Timestamp: primitive.NewDateTimeFromTime(time.Now().UTC()),
-			Volume:    currentMktData[i].MarketData.TotalVolume,
-			Price:     currentMktData[i].MarketData.CurrentPrice,
-			Marketcap: currentMktData[i].MarketData.MarketCap})
+		return result
 	}
-
-	return result
 }
 
 func historicalByContract(w http.ResponseWriter, r *http.Request) {
@@ -610,28 +619,32 @@ func historicalByContract(w http.ResponseWriter, r *http.Request) {
 func handleRequest(r *mux.Router) {
 
 	//El routeo va en orden de la ruta mas especifica a la menos especifica
+	getR := r.Methods(http.MethodGet).Subrouter()
 
-	r.HandleFunc("/mktdata/coins/marketdata/ordered", orderedCoins).Queries("order", "{order}", "start", "{start:[0-9]+}", "end", "{end:[0-9]+}")
+	getR.HandleFunc("/mktdata/coins/marketdata/ordered", orderedCoins).Queries("order", "{order}", "start", "{start:[0-9]+}", "end", "{end:[0-9]+}")
 
-	r.HandleFunc("/mktdata/coins/marketdata/historical/ids", historicalByID).Queries("ids", "{ids}", "start", "{start:[0-9]+}", "end", "{end:[0-9]+}")
+	getR.HandleFunc("/mktdata/coins/marketdata/historical/ids", historicalByID).Queries("ids", "{ids}", "start", "{start:[0-9]+}", "end", "{end:[0-9]+}")
 
-	r.HandleFunc("/mktdata/coins/marketdata/historical/contracts", historicalByContract).Queries("platform", "{platform}", "contracts", "{contracts}", "start", "{start:[0-9]+}", "end", "{end:[0-9]+}")
+	getR.HandleFunc("/mktdata/coins/marketdata/historical/contracts", historicalByContract).Queries("platform", "{platform}", "contracts", "{contracts}", "start", "{start:[0-9]+}", "end", "{end:[0-9]+}")
 
-	r.HandleFunc("/mktdata/coins/marketdata/ids", coinsById).Queries("ids", "{ids}")
+	getR.HandleFunc("/mktdata/coins/marketdata/ids", coinsById).Queries("ids", "{ids}")
 
-	r.HandleFunc("/mktdata/coins/marketdata/contracts", coinsByContract).Queries("platform", "{platform}", "contracts", "{contracts}")
+	getR.HandleFunc("/mktdata/coins/marketdata/contracts", coinsByContract).Queries("platform", "{platform}", "contracts", "{contracts}")
 
-	r.HandleFunc("/mktdata/coins/info/complete/ids", completeCoinsInfoById).Queries("ids", "{ids}")
+	getR.HandleFunc("/mktdata/coins/info/complete/ids", completeCoinsInfoById).Queries("ids", "{ids}")
 
-	r.HandleFunc("/mktdata/coins/info/complete/contracts", completeCoinsInfoByContract).Queries("contracts", "{contracts}")
+	getR.HandleFunc("/mktdata/coins/info/complete/contracts", completeCoinsInfoByContract).Queries("contracts", "{contracts}")
 
-	r.HandleFunc("/mktdata/coins/info/reducted/contracts", reductedCoinsInfoByContract).Queries("platform", "{platform}", "contracts", "{contracts}")
+	getR.HandleFunc("/mktdata/coins/info/reducted/contracts", reductedCoinsInfoByContract).Queries("platform", "{platform}", "contracts", "{contracts}")
 
-	r.HandleFunc("/mktdata/balance/exchange/binance", binanceBalance)
+	postR := r.Methods(http.MethodPost).Subrouter()
+	postR.HandleFunc("/mktdata/balance/exchange/binance", binanceBalance)
 
 	c := cors.New(cors.Options{
-		AllowCredentials: true,
-		AllowedOrigins:   []string{"http://jacarandapp.com", "https://jacarandapp.com", "http://www.jacarandapp.com", "https://www.jacarandapp.com"},
+		AllowCredentials:   true,
+		AllowedMethods:     []string{http.MethodPost, http.MethodGet, http.MethodOptions},
+		OptionsPassthrough: true,
+		AllowedOrigins:     []string{"http://jacarandapp.com", "https://jacarandapp.com", "http://www.jacarandapp.com", "https://www.jacarandapp.com"},
 		//AllowedOrigins: []string{"http://localhost:3000"},
 	})
 

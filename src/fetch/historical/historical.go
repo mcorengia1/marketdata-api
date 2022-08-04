@@ -174,7 +174,7 @@ func UpdateHistoricalMktData(cg *cgClient.Client, dbClient *mongo.Client, market
 					}
 					err = setHistoricalData(collections[i], db, cg)
 					if err != nil {
-						level.Error(logger).Log("msg", "Error getting the market chart", "ts", log.DefaultTimestampUTC(), "err", err)
+						level.Error(logger).Log("msg", "Error setting the market chart", "ts", log.DefaultTimestampUTC(), "err", err)
 					}
 				}
 			}
@@ -240,7 +240,6 @@ func setHistoricalData(ID string, db *mongo.Database, cg *cgClient.Client) error
 		return err
 
 	} else {
-
 		return nil
 	}
 }
@@ -282,7 +281,7 @@ func errManagment() {
 // 	collections, err := db.ListCollectionNames(context.Background(), bson.D{}, options.ListCollections().SetNameOnly(true))
 
 // 	if err != nil {
-// 		level.Error(logger).Log("msg", "Error getting the collections names", "ts", log.DefaultTimestampUTC(), "err", err)
+// 		level.Error(logger).Log("msg", "Error setting the collections names", "ts", log.DefaultTimestampUTC(), "err", err)
 // 	}
 
 // 	for i := 0; i < len(*coinsList); i++ {
@@ -318,7 +317,7 @@ func errManagment() {
 // 						}
 // 						err = setHistoricalData(collections[j], db, cg)
 // 						if err != nil {
-// 							level.Error(logger).Log("msg", "Error getting the market chart", "ts", log.DefaultTimestampUTC(), "err", err)
+// 							level.Error(logger).Log("msg", "Error setting the market chart", "ts", log.DefaultTimestampUTC(), "err", err)
 // 						}
 
 // 						fmt.Println("Diferencia > 2d todo de vuelta")
@@ -355,7 +354,7 @@ func errManagment() {
 // 				// No esta el historico de esa crypto asi que tengo que traer todo entero
 // 				err = setHistoricalData((*coinsList)[i].ID, db, cg)
 // 				if err != nil {
-// 					level.Error(logger).Log("msg", "Error getting the market chart", "ts", log.DefaultTimestampUTC(), "err", err)
+// 					level.Error(logger).Log("msg", "Error setting the market chart", "ts", log.DefaultTimestampUTC(), "err", err)
 // 				}
 
 // 				fmt.Println("No hay historico, traigo todo" + (*coinsList)[i].ID)
