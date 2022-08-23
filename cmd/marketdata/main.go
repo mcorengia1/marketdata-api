@@ -125,10 +125,12 @@ func updateMarketData() {
 }
 
 func updateHistoricalData() {
+
 	for range time.Tick(time.Minute * 60) {
 		//Son las 00:00 +-1hour
 
-		historical.UpdateHistoricalMktData(cg, mongo.Client, &marketData)
+		historical.UpdateHistoricalDB(cg, mongo.Client)
+		//historical.UpdateHistoricalMktData(cg, mongo.Client, &marketData)
 
 		if time.Now().UTC().Hour() == 23 || time.Now().UTC().Hour() == 0 {
 
@@ -454,48 +456,29 @@ func binanceBalance(w http.ResponseWriter, r *http.Request) {
 			//Si hay coinData cargo los precios con la sparkline
 			//response.Assets[i].CurrentInfo.Id
 			assetID := []string{response.Assets[i].CurrentInfo.Id}
-			historical := getHistoricalByIDs(assetID, time.Now().Add(-time.Hour*792).Unix(), time.Now().Unix()) // response.Assets[i].Holdings[0].Date
+			historical := getHistoricalByIDs(assetID, time.Now().Add(-time.Hour*756).Unix(), time.Now().Unix()) // response.Assets[i].Holdings[0].Date
 
 			if len(historical[0].Data) == 0 {
 				//No historical data for that coin
 				continue
 			}
 
-			//Recorro cada holding[j] de cada asset[i]
-			//+1 por incluir el balance de AHORA
-			//el ultimo J deberia matchear con k=0
-			for j := 0; j < exchange.Limit+1; j++ {
-				//for j := len(exchange.Limit) ; j>=0;j++ {
+			//Holdings el [0] es ahora
+			//historical [0] es hace un mes
 
-				// Comparo los dates hasta que coincidan con un margen de error aceptable
-				found := false
-				for k := 0; k < len(historical[0].Data); k++ {
-					//for k := len(historical[0].Data) - 1; k >= 0; k-- {
+			var iterations int
+			if len(historical[0].Data) < len(response.Assets[i].Holdings) {
+				iterations = len(historical[0].Data)
+			} else {
+				iterations = len(response.Assets[i].Holdings)
+			}
 
-					difference := historical[0].Data[k].Timestamp.Time().Unix() - response.Assets[i].Holdings[j].Date
-					if difference < 0 {
-						difference *= -1
-					}
+			for j := 0; j < iterations; j++ {
+				//tiene que recorrer el historico
+				//no va a tener array out of range pero por ahi quedan valores de holding sin completar
 
-					//Diff of 2 hours max
-					if difference < 7200 {
-						response.Assets[i].Holdings[j].Price = historical[0].Data[k].Price
-						found = true
-						break
-					}
-				}
+				response.Assets[i].Holdings[iterations-j-1].Price = historical[0].Data[j].Price
 
-				if !found {
-					//no mktdata for that coin
-					if j > 0 {
-						response.Assets[i].Holdings[j].Price = response.Assets[i].Holdings[j-1].Price
-					}
-				}
-
-				//j+1 ???
-				//response.Assets[i].Holdings[j].Price = historical[0].Data[exchange.Limit-j-1].Price
-				//var priceIndex = len(response.Assets[i].CurrentInfo.SparkLine) - 1 - j*(len(response.Assets[i].CurrentInfo.SparkLine)/7) //9,j=0 ** 9-6*(10/7)
-				//response.Assets[i].Holdings[j+1].Price = response.Assets[i].CurrentInfo.SparkLine[priceIndex]
 			}
 
 			response.Assets[i].Holdings[0].Price = response.Assets[i].CurrentInfo.CurrentPrice
@@ -533,6 +516,7 @@ func historicalByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func getHistoricalByIDs(ids []string, start int64, end int64) []HistoryResponse {
+
 	//for each id look for a collection
 	//get the data in the given range
 	result := make([]HistoryResponse, len(ids))
@@ -644,8 +628,8 @@ func handleRequest(r *mux.Router) {
 		AllowCredentials:   true,
 		AllowedMethods:     []string{http.MethodPost, http.MethodGet, http.MethodOptions},
 		OptionsPassthrough: true,
-		AllowedOrigins:     []string{"http://jacarandapp.com", "https://jacarandapp.com", "http://www.jacarandapp.com", "https://www.jacarandapp.com"},
-		//AllowedOrigins: []string{"http://localhost:3000"},
+		//AllowedOrigins:     []string{"http://jacarandapp.com", "https://jacarandapp.com", "http://www.jacarandapp.com", "https://www.jacarandapp.com"},
+		AllowedOrigins: []string{"http://localhost:3000"},
 	})
 
 	handler := c.Handler(r)

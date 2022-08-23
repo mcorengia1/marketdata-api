@@ -95,6 +95,8 @@ func UpdateHistoricalDB(cg *cgClient.Client, dbClient *mongo.Client) {
 			err = setHistoricalData((*coinsList)[i].ID, db, cg)
 			if err != nil {
 				level.Error(logger).Log("msg", "Error getting the market chart", "ts", log.DefaultTimestampUTC(), "err", err)
+				fmt.Println("Waiting 60sec before continue with the requests")
+				time.Sleep(time.Duration(time.Second * waitOnErrors))
 			}
 		}
 	}
@@ -175,6 +177,8 @@ func UpdateHistoricalMktData(cg *cgClient.Client, dbClient *mongo.Client, market
 					err = setHistoricalData(collections[i], db, cg)
 					if err != nil {
 						level.Error(logger).Log("msg", "Error setting the market chart", "ts", log.DefaultTimestampUTC(), "err", err)
+						fmt.Println("Waiting 60sec before continue with the requests")
+						time.Sleep(time.Duration(time.Second * waitOnErrors))
 					}
 				}
 			}

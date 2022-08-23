@@ -14,11 +14,11 @@ import (
 var logger log.Logger = log.NewLogfmtLogger(os.Stdout)
 
 // testing values
-//const requestByMinute = 25
+//const requestByMinute = 10
 
 //const perPage = 150
 
-const requestByMinute = 25
+const requestByMinute = 15
 const perPage = 150
 
 /* La data desde la API de coingecko devuelve un valor del tipo *types.CoinsMarket

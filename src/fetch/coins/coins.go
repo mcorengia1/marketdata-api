@@ -17,7 +17,7 @@ import (
 )
 
 // Testing value
-//const requestByMinute = 40
+//const requestByMinute = 1
 
 const requestByMinute = 10
 
@@ -73,7 +73,8 @@ func UpdateCoinsInfo(cg *cgClient.Client, dbClient *mongo.Client) {
 				level.Error(logger).Log("msg", "CoinInfo request failed, waiting to retry", "id", (*coinsList)[i].ID, "err", err, "ts", log.DefaultTimestampUTC())
 				time.Sleep(time.Duration(time.Second * 60))
 				level.Info(logger).Log("msg", "Continuing with coinInfo requests", "ts", log.DefaultTimestampUTC())
-				i--
+				//i--
+				//Ese elemento se va a intentar agregar la proxima vez porque si coingecko elimina esa coin de su lista queda en un loop infinito
 				continue
 			} else {
 				_, err = coll.InsertOne(context.Background(), cgClient.CoinInfoDBCreate(*coin))
